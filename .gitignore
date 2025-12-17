@@ -6,3 +6,5 @@ public/img/practice*
 server.key
 server.cert
 secret.json
+img*
+.env

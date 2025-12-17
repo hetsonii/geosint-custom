@@ -12,12 +12,6 @@ COPY app .
 
 COPY challenges.yml .
 
-RUN rm -f ./public/img/chall*/*
-
-RUN node process.js
-
-RUN node pull_challs.js
-
 EXPOSE 6958
 
 CMD [ "node", "server.js" ]

@@ -3,142 +3,190 @@ const https = require("https");
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
+const logger = require('./logger');
 
 const app = express();
 const port = 6958;
-app.use(express.static(__dirname + '/public/'));
+
+app.use((req, res, next) => {
+    if (req.path && req.path.startsWith('/img/')) {
+        const absPath = path.join(__dirname, 'public', req.path);
+        logger.verbose(`Image requested: ${req.path}`);
+    }
+    return next();
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.json());
 app.set('view engine', 'ejs');
 
-const defaults = require('./defaults.json');
+const defaults = require(path.join(__dirname, 'defaults.json'));
 const info_keys = ["img", "width", "height"];
+const challsJsonPath = path.join(__dirname, 'challs.json');
+
 let challsLastModifiedTime = 0;
-let coords = JSON.parse(fs.readFileSync('./challs.json', 'utf8'));
-let info = parse_public_info(coords)
+let coords = {};
+let info = {};
 
-console.log(coords);
-console.log(info);
-
-app.get(`/`, function(req, res) {
-    res.sendFile(__dirname+'/index.html');
-});
-
-for (const [comp, challs] of Object.entries(coords)) {
-    for (const [name, {pano, lat, lng, flag}] of Object.entries(challs)) {
-    	app.get(`/${comp}-${name}`, function(req, res) {
-    	    res.render('chall',{'API_KEY': process.env.MAPS_API_KEY});
-   	 });
-
-    	app.post(`/${comp}-${name}/submit`, (req, res) => {
-	    //console.log(req.body);
-	    const [ guess_lat, guess_lng ] = req.body;
-	    //console.log("lat: " + guess_lat + "\nlng: " + guess_lng);
-	    let dist = distance(guess_lat, guess_lng, lat, lng, 'K');
-	    //console.log("dist: " + dist);
-	    if (dist == 0.0) {
-            console.log(`Correct guess for ${comp}/${name} from ${req.ip}`)
-	    	res.send("yes, " + get_flag(comp,name));
-	    } else {
-	    	res.send("not here");
-	    }
-    	});
+function distance(lat1, lon1, lat2, lon2) {
+    function toRad(deg) { return deg * Math.PI / 180; }
+    if (!isFinite(lat1) || !isFinite(lon1) || !isFinite(lat2) || !isFinite(lon2)) {
+        return Number.MAX_VALUE;
     }
+    if (lat1 === lat2 && lon1 === lon2) return 0;
+    
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + 
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * 
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    
+    return R * c;
 }
 
-app.get('/info.json', (req, res) => {
-    coords, info = get_challenge_info(coords);
-    console.log(info);
-    res.json(info)
-});
-
-function get_challenge_info(current_info) {
-    fs.stat('./challs.json', (err, stats) => {
-        if (err) {
-            return res.status(500).send("Error reading file stats");
+function getFlag(comp, name) {
+    const challenge = coords[comp][name];
+    const file = challenge['flag_file'];
+    let { flag } = challenge;
+    
+    if (file) {
+        const secretPath = path.join('/run/secrets/', file);
+        if (fs.existsSync(file)) {
+            flag = fs.readFileSync(file, 'utf8').trim();
+        } else if (fs.existsSync(secretPath)) {
+            flag = fs.readFileSync(secretPath, 'utf8').trim();
         }
-
-        const currentModifiedTime = new Date(stats.mtime).getTime();
-        if (currentModifiedTime > challsLastModifiedTime) {
-            let newData = JSON.parse(fs.readFileSync('./challs.json', 'utf8'));
-            console.log("Reading in new challenges.");
-            console.log(newData);
-            current_info = newData;
-            info = parse_public_info(current_info);
-            console.log(info);
-        }
-    });
-    return current_info, info
+    }
+    
+    return flag;
 }
 
-function parse_public_info(challenge_info) {
+function parsePublicInfo(challengeInfo) {
     const newData = {};
-    for (const [comp, challs] of Object.entries(challenge_info)) {
-        newData[comp] = {}; 
+    
+    for (const [comp, challs] of Object.entries(challengeInfo)) {
+        newData[comp] = {};
         for (const [name, properties] of Object.entries(challs)) {
             newData[comp][name] = {};
             for (const property of info_keys) {
-                const value = properties.hasOwnProperty(property) ? properties[property] : defaults[property];
+                const value = properties.hasOwnProperty(property) 
+                    ? properties[property] 
+                    : defaults[property];
                 newData[comp][name][property] = value;
             }
         }
     }
-
-    return newData
+    
+    return newData;
 }
 
-function get_flag(comp, name) {
-    let file = coords[comp][name]['flag_file'];
-    let {flag} = coords[comp][name];
-    if (file) {
-        let secret = path.join('/run/secrets/',file);
-        if (fs.existsSync(file)) {
-            console.log(`reading file from ${file}`)
-            flag = fs.readFileSync(file);
-        } else if (fs.existsSync(secret)) {
-            console.log(`reading file from ${secret}`)
-            flag = fs.readFileSync(secret);
+function registerRoutes(currentCoords) {
+    app.get('/', (req, res) => {
+        res.sendFile(path.join(__dirname, 'index.html'));
+    });
+
+    app.get('/info.json', (req, res) => {
+        reloadIfChanged();
+        res.json(info);
+    });
+
+    for (const [comp, challs] of Object.entries(currentCoords)) {
+        for (const [name] of Object.entries(challs)) {
+            app.get(`/${comp}-${name}`, (req, res) => {
+                res.render('chall', { API_KEY: process.env.MAPS_API_KEY });
+            });
+
+            app.post(`/${comp}-${name}/submit`, (req, res) => {
+                const freshChall = coords[comp] && coords[comp][name];
+                if (!freshChall) {
+                    return res.status(404).send("Challenge not found");
+                }
+
+                const { lat: trueLat, lng: trueLng } = freshChall;
+                const [guessLat, guessLng] = req.body;
+                
+                const dist = distance(
+                    Number(guessLat), 
+                    Number(guessLng), 
+                    trueLat, 
+                    trueLng
+                );
+
+                if (dist === 0 || dist <= 0.05) {
+                    const flag = getFlag(comp, name);
+                    logger.info(`Correct guess for ${comp}/${name} by ${req.ip}`);
+                    res.send("yes, " + flag);
+                } else {
+                    logger.verbose(`Incorrect guess for ${comp}/${name}: ${dist.toFixed(2)}km off`);
+                    res.send("not here");
+                }
+            });
         }
     }
-    return flag;
 }
 
-// Honestly no idea if this is accurate or not :shrug:
-function distance(lat1, lon1, lat2, lon2, unit) {
-    if ((lat1 == lat2) && (lon1 == lon2)) {
-        return 0;
-    } else {
-        let radlat1 = Math.PI * lat1/180;
-        let radlat2 = Math.PI * lat2/180;
-        let theta = lon1-lon2;
-        let radtheta = Math.PI * theta/180;
-        let dist = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
-        dist = Math.min(dist, 1);
-        dist = Math.acos(dist);
-        dist = dist * 180/Math.PI;
-        dist = dist * 60 * 1.1515;
-        if (unit=="K") { dist *= 1.609344 }
-        if (unit=="N") { dist *= 0.8684 }
-        return (dist / 1.609).toFixed(1);
+function reloadIfChanged() {
+    try {
+        if (!fs.existsSync(challsJsonPath)) return;
+        
+        const stats = fs.statSync(challsJsonPath);
+        const currentModifiedTime = new Date(stats.mtime).getTime();
+
+        if (currentModifiedTime > challsLastModifiedTime) {
+            logger.info("Reloading challenges...");
+            const newData = JSON.parse(fs.readFileSync(challsJsonPath, 'utf8'));
+            coords = newData;
+            info = parsePublicInfo(coords);
+            challsLastModifiedTime = currentModifiedTime;
+            logger.success("Challenges reloaded");
+        }
+    } catch (err) {
+        logger.error(`Error reloading challenges: ${err.message}`);
     }
 }
 
-if (process.env.SECURE) {
-    // HTTPS
-    let key = (process.env.HTTPS_KEY | "server.key");
-    let cert = (process.env.HTTPS_CERT | "server.cert");
+async function start() {
+    logger.info("Server starting, waiting for challs.json...");
 
-    const options = {
-    key: fs.readFileSync(key),
-    cert: fs.readFileSync(cert),
-    };
+    while (true) {
+        if (fs.existsSync(challsJsonPath)) {
+            try {
+                const data = fs.readFileSync(challsJsonPath, 'utf8');
+                if (data.trim().length > 0) {
+                    coords = JSON.parse(data);
+                    info = parsePublicInfo(coords);
+                    challsLastModifiedTime = new Date(fs.statSync(challsJsonPath).mtime).getTime();
+                    break;
+                }
+            } catch (err) {
+                logger.warn("Waiting for valid JSON in challs.json...");
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
 
-    https.createServer(options, app).listen(port, function (req, res) {
-    console.log(`Server started at port ${port}`);
-    });
-} else {
-    // HTTP
-    app.listen(port, () => console.log(`Sever started on port ${port}`));
-};
+    logger.success("challs.json loaded");
+    registerRoutes(coords);
 
+    if (process.env.SECURE === 'true') {
+        const keyPath = process.env.HTTPS_KEY || "server.key";
+        const certPath = process.env.HTTPS_CERT || "server.cert";
+        
+        const options = {
+            key: fs.readFileSync(keyPath),
+            cert: fs.readFileSync(certPath),
+        };
+        
+        https.createServer(options, app).listen(port, () => {
+            logger.success(`Secure server started on port ${port}`);
+        });
+    } else {
+        app.listen(port, () => {
+            logger.success(`Server started on port ${port}`);
+        });
+    }
+}
 
-
+start();

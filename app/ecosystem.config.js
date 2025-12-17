@@ -10,8 +10,8 @@ module.exports = {
             args: "continuous"
         },
         {
-            name: "pull",
-            script: "pull_challs.js",
+            name: "pull_fast",
+            script: "pull_challs_fast.js",
             args: "continuous"
         }
     ]
