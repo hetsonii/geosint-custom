@@ -73,17 +73,27 @@ async function processAllChallenges() {
     }
 }
 
+async function waitAndProcess() {
+    // Wait for challs.json to be ready
+    while (!fileUtils.fileExists(paths.CHALLENGES_JSON)) {
+        logger.info('Waiting for challs.json to be created...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    await processAllChallenges();
+}
+
 async function start() {
     if (process.argv[2] === 'continuous') {
         logger.info('Continuous mode enabled');
         
-        if (fileUtils.fileExists(paths.CHALLENGES_JSON)) {
-            await processAllChallenges();
-        } else {
-            logger.info('Waiting for challs.json to be created...');
-        }
+        // Initial process - wait for challs.json
+        await waitAndProcess();
         
+        // Watch challs.json for updates from process.worker
+        // This ensures we re-fetch tiles when process.worker updates the JSON
         fileWatcherService.watchChallengesJson(processAllChallenges);
+        
+        // Watch for manual tile deletions
         fileWatcherService.watchTileDirectory(processAllChallenges);
     } else {
         await processAllChallenges();

@@ -11,8 +11,6 @@ services:
     container_name: geosint
     hostname: geosint
     restart: always
-    environment:
-      - LOG_LEVEL=verbose
     volumes:
       - "./challenges.yml:/usr/src/app/challenges.yml"
       - "./app/public/:/usr/src/app/public/"
