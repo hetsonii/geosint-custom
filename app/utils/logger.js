@@ -1,4 +1,4 @@
-const LOG_LEVEL = process.env.LOG_LEVEL || 'verbose'; // 'verbose' or 'summary'
+const LOG_LEVEL = process.env.LOG_LEVEL || 'summary'; // 'verbose' or 'summary'
 
 const colors = {
     reset: '\x1b[0m',

@@ -1,12 +1,17 @@
 const fs = require('fs').promises;
 const fsSync = require('fs');
-const path = require('path');
 
 async function ensureDir(dirPath) {
     try {
         await fs.mkdir(dirPath, { recursive: true });
     } catch (err) {
         if (err.code !== 'EEXIST') throw err;
+    }
+}
+
+function ensureDirSync(dirPath) {
+    if (!fsSync.existsSync(dirPath)) {
+        fsSync.mkdirSync(dirPath, { recursive: true });
     }
 }
 
@@ -39,27 +44,13 @@ async function listFiles(dirPath) {
     }
 }
 
-function countTilesExpected(maxZ) {
-    let count = 0;
-    for (let z = 0; z <= maxZ; z++) {
-        count += (2 ** z) * (2 ** (z - 1));
-    }
-    return count;
-}
-
-async function countTilesExisting(imgDir) {
-    const files = await listFiles(imgDir);
-    return files.filter(f => f.startsWith('tile_') && f.endsWith('.jpeg')).length;
-}
-
 module.exports = {
     ensureDir,
+    ensureDirSync,
     writeFile,
     readFile,
     fileExists,
     writeJSON,
     readJSON,
     listFiles,
-    countTilesExpected,
-    countTilesExisting,
 };

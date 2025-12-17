@@ -6,13 +6,13 @@ module.exports = {
         },
         {
             name: "process",
-            script: "process.js",
+            script: "workers/process.worker.js",
             args: "continuous"
         },
         {
             name: "pull_fast",
-            script: "pull_challs_fast.js",
+            script: "workers/pull.worker.js",
             args: "continuous"
         }
     ]
-}
+};
