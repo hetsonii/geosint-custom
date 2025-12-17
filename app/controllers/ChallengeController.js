@@ -1,4 +1,5 @@
 const challengeService = require('../services/ChallengeService');
+const analyticsService = require('../services/AnalyticsService');
 const distanceUtil = require('../utils/distance');
 const logger = require('../utils/logger');
 const env = require('../config/environment');
@@ -22,7 +23,7 @@ class ChallengeController {
         res.json(this.publicInfo);
     }
 
-    submitGuess(req, res) {
+    async submitGuess(req, res) {
         const { comp, name } = req.params;
         const challenge = this.challenges[comp] && this.challenges[comp][name];
         
@@ -40,13 +41,32 @@ class ChallengeController {
             trueLng
         );
 
-        if (distanceUtil.isCorrect(dist)) {
+        const isCorrect = distanceUtil.isCorrect(dist);
+
+        // Record analytics
+        await analyticsService.recordGuess(
+            comp, 
+            name, 
+            Number(guessLat), 
+            Number(guessLng), 
+            isCorrect,
+            dist
+        );
+
+        if (isCorrect) {
             const flag = challengeService.getFlag(comp, name, this.challenges);
             logger.info(`Correct guess for ${comp}/${name} by ${req.ip}`);
-            res.send("yes, " + flag);
+            res.json({ 
+                success: true, 
+                flag: flag,
+                distance: dist 
+            });
         } else {
             logger.verbose(`Incorrect guess for ${comp}/${name}: ${dist.toFixed(2)}km off`);
-            res.send("not here");
+            res.json({ 
+                success: false, 
+                distance: dist 
+            });
         }
     }
 }

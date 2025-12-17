@@ -1,10 +1,35 @@
+# Node modules
 node_modules/
-package.json
-package-lock.json
-public/img/chall*
-public/img/practice*
-server.key
-server.cert
-secret.json
-img*
+
+# Environment files
 .env
+.env.local
+
+# Generated files
+challs.json
+
+# Analytics data
+app/public/analytics/
+
+# Tile images
+app/public/img/*/
+
+# Keep icons
+!app/public/img/icons/
+!app/public/img/*.png
+!app/public/img/*.ico
+!app/public/img/*.svg
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

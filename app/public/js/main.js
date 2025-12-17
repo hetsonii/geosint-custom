@@ -70,7 +70,6 @@ class ChallengeCard {
     }
 
     sanitizeName(name) {
-        // Replace spaces with underscores for URL compatibility
         return name.replace(/\s+/g, '_');
     }
 
@@ -79,13 +78,11 @@ class ChallengeCard {
         button.id = 'chall-card';
         button.setAttribute('aria-label', `Challenge: ${this.name}`);
 
-        // Set background image if available
         if (this.info.img) {
             const sanitizedName = this.sanitizeName(this.name);
             button.style.backgroundImage = `url('/img/${this.comp}/${sanitizedName}/${this.info.img}')`;
         }
 
-        // Create card content
         const content = document.createElement('div');
         content.className = 'card-content';
 
@@ -96,13 +93,65 @@ class ChallengeCard {
         content.appendChild(title);
         button.appendChild(content);
 
-        // Add click handler with sanitized name
         button.addEventListener('click', () => {
             const sanitizedName = this.sanitizeName(this.name);
             window.location.href = `/${this.comp}-${sanitizedName}`;
         });
 
         return button;
+    }
+}
+
+class ViewManager {
+    constructor() {
+        this.currentView = localStorage.getItem('viewMode') || 'grid';
+    }
+
+    createControls() {
+        const controlsBar = document.createElement('div');
+        controlsBar.id = 'controls-bar';
+
+        const viewToggle = document.createElement('div');
+        viewToggle.id = 'view-toggle';
+
+        const gridBtn = document.createElement('button');
+        gridBtn.className = 'view-btn';
+        gridBtn.textContent = '⊞ Grid';
+        gridBtn.onclick = () => this.setView('grid');
+
+        const listBtn = document.createElement('button');
+        listBtn.className = 'view-btn';
+        listBtn.textContent = '☰ List';
+        listBtn.onclick = () => this.setView('list');
+
+        viewToggle.appendChild(gridBtn);
+        viewToggle.appendChild(listBtn);
+        controlsBar.appendChild(viewToggle);
+
+        return controlsBar;
+    }
+
+    setView(view) {
+        this.currentView = view;
+        localStorage.setItem('viewMode', view);
+        this.updateUI();
+    }
+
+    updateUI() {
+        const cardsContainers = document.querySelectorAll('#cards');
+        const viewBtns = document.querySelectorAll('.view-btn');
+
+        cardsContainers.forEach(container => {
+            container.classList.remove('grid-view', 'list-view');
+            container.classList.add(`${this.currentView}-view`);
+        });
+
+        viewBtns.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.textContent.toLowerCase().includes(this.currentView)) {
+                btn.classList.add('active');
+            }
+        });
     }
 }
 
@@ -152,12 +201,19 @@ class ChallengeGrid {
         const compsDiv = document.getElementById('competitions');
         if (!compsDiv) return;
 
-        compsDiv.innerHTML = ''; // Clear existing content
+        compsDiv.innerHTML = '';
+
+        // Add view controls
+        const viewManager = new ViewManager();
+        const controls = viewManager.createControls();
+        compsDiv.appendChild(controls);
 
         Object.entries(this.competitions).forEach(([comp, challenges]) => {
             const compElement = this.renderCompetition(comp, challenges);
             compsDiv.appendChild(compElement);
         });
+
+        viewManager.updateUI();
     }
 }
 
