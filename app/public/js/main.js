@@ -69,6 +69,11 @@ class ChallengeCard {
         this.info = info;
     }
 
+    sanitizeName(name) {
+        // Replace spaces with underscores for URL compatibility
+        return name.replace(/\s+/g, '_');
+    }
+
     createCardElement() {
         const button = document.createElement('button');
         button.id = 'chall-card';
@@ -76,7 +81,8 @@ class ChallengeCard {
 
         // Set background image if available
         if (this.info.img) {
-            button.style.backgroundImage = `url('/img/${this.comp}/${this.name}/${this.info.img}')`;
+            const sanitizedName = this.sanitizeName(this.name);
+            button.style.backgroundImage = `url('/img/${this.comp}/${sanitizedName}/${this.info.img}')`;
         }
 
         // Create card content
@@ -90,9 +96,10 @@ class ChallengeCard {
         content.appendChild(title);
         button.appendChild(content);
 
-        // Add click handler
+        // Add click handler with sanitized name
         button.addEventListener('click', () => {
-            window.location.href = `/${this.comp}-${this.name}`;
+            const sanitizedName = this.sanitizeName(this.name);
+            window.location.href = `/${this.comp}-${sanitizedName}`;
         });
 
         return button;

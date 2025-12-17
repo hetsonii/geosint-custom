@@ -25,7 +25,7 @@ class TileService {
             return resp;
         } catch (err) {
             if (retries < MAX_FETCH_RETRIES) {
-                logger.warn(`Retry ${retries + 1}/${MAX_FETCH_RETRIES} for tile`);
+                logger.verbose(`Retry ${retries + 1}/${MAX_FETCH_RETRIES} for tile`);
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
                 return this.fetchWithRetry(url, retries + 1);
             }
@@ -65,7 +65,12 @@ class TileService {
             const resp = await this.fetchWithRetry(url);
             return await this.saveTile(x, y, z, comp, name, resp);
         } catch (err) {
-            logger.error(`Failed to fetch ${comp}/${name} tile (${x},${y},${z}): ${err.message}`);
+            // HTTP 400 means tile doesn't exist at this coordinate - this is normal
+            if (err.message.includes('HTTP 400')) {
+                logger.verbose(`Tile not available for ${comp}/${name} (${x},${y},${z})`);
+            } else {
+                logger.error(`Failed to fetch ${comp}/${name} tile (${x},${y},${z}): ${err.message}`);
+            }
             return false;
         }
     }

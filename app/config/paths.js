@@ -5,6 +5,11 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const VIEWS_DIR = path.join(ROOT_DIR, 'views');
 const SECRETS_DIR = '/run/secrets';
 
+function sanitizeName(name) {
+    // Replace spaces with underscores for filesystem compatibility
+    return name.replace(/\s+/g, '_');
+}
+
 module.exports = {
     ROOT_DIR,
     PUBLIC_DIR,
@@ -21,7 +26,7 @@ module.exports = {
     
     // Helper functions
     getCompDir: (comp) => path.join(PUBLIC_DIR, 'img', comp),
-    getChallengeDir: (comp, name) => path.join(PUBLIC_DIR, 'img', comp, name),
-    getMetaFile: (comp, name) => path.join(PUBLIC_DIR, 'img', comp, name, '.meta'),
-    getTileFile: (comp, name, x, y, z) => path.join(PUBLIC_DIR, 'img', comp, name, `tile_${x}_${y}_${z}.jpeg`),
+    getChallengeDir: (comp, name) => path.join(PUBLIC_DIR, 'img', comp, sanitizeName(name)),
+    getMetaFile: (comp, name) => path.join(PUBLIC_DIR, 'img', comp, sanitizeName(name), '.meta'),
+    getTileFile: (comp, name, x, y, z) => path.join(PUBLIC_DIR, 'img', comp, sanitizeName(name), `tile_${x}_${y}_${z}.jpeg`),
 };

@@ -28,7 +28,9 @@ class ChallengeManager {
         const challComp = link[link.length - 1].length === 0 
             ? link[link.length - 2] 
             : link[link.length - 1];
-        const [comp, name] = challComp.split('-');
+        const [comp, urlName] = challComp.split('-');
+        // Convert underscores back to spaces for the actual challenge name
+        const name = urlName.replace(/_/g, ' ');
         return { comp, name };
     }
 
@@ -150,7 +152,9 @@ class ChallengeManager {
 
     getCustomPanoramaTileUrl(pano, zoom, tileX, tileY) {
         const origin = document.location.origin;
-        return `${origin}/img/${this.compName}/${this.challName}/tile_${tileX}_${tileY}_${zoom}.jpeg`;
+        // Use underscores for file paths
+        const urlName = this.challName.replace(/\s+/g, '_');
+        return `${origin}/img/${this.compName}/${urlName}/tile_${tileX}_${tileY}_${zoom}.jpeg`;
     }
 
     getCustomPanorama() {
