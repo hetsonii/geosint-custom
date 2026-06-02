@@ -187,9 +187,30 @@ class ChallengeManager {
     }
 
     handleSubmitResponse(response) {
-        if (response.startsWith('yes')) {
-            const flag = response.replace('yes, ', '');
-            UIManager.showSuccessModal(flag);
+        let result = null;
+        
+        // Parse response - handle both JSON object and string formats
+        if (typeof response === 'string') {
+            try {
+                result = JSON.parse(response);
+            } catch (e) {
+                // Legacy string format: "yes, flag{...}"
+                if (response.startsWith('yes')) {
+                    result = {
+                        success: true,
+                        flag: response.replace('yes, ', '')
+                    };
+                } else {
+                    result = { success: false };
+                }
+            }
+        } else {
+            result = response;
+        }
+        
+        // Handle response
+        if (result.success === true && result.flag) {
+            UIManager.showSuccessModal(result.flag);
             UIManager.triggerConfetti();
             document.getElementById('chall-result').innerHTML = '✓ Correct!';
         } else {

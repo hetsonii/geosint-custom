@@ -6,6 +6,8 @@ const metadataService = require('../services/MetadataService');
 const fileWatcherService = require('../services/FileWatcherService');
 const paths = require('../config/paths');
 
+const MAPS_API_KEY = process.env.MAPS_API_KEY;
+
 async function processChallenge(comp, name, challenge) {
     const { panoType, pano, lat, lng, maxZ } = challenge;
 
@@ -31,7 +33,7 @@ async function processChallenge(comp, name, challenge) {
     const startTime = Date.now();
 
     const { total, success } = await tileService.fetchAllTiles(
-        comp, name, panoType, pano, maxZ
+        comp, name, panoType, pano, maxZ, MAPS_API_KEY
     );
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -83,6 +85,11 @@ async function waitAndProcess() {
 }
 
 async function start() {
+    if (!MAPS_API_KEY) {
+        logger.error('MAPS_API_KEY environment variable is not set');
+        process.exit(1);
+    }
+
     if (process.argv[2] === 'continuous') {
         logger.info('Continuous mode enabled');
         

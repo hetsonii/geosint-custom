@@ -7,13 +7,39 @@ const { TILE_BATCH_SIZE, MAX_FETCH_RETRIES, RETRY_DELAY_MS, FILE_WRITE_DELAY_MS,
 class TileService {
     constructor() {
         this.pendingWrites = [];
+        this.sessionToken = null;
     }
 
-    buildTileUrl(panoType, pano, x, y, z) {
+    async getSessionToken(apiKey) {
+        if (this.sessionToken) return this.sessionToken;
+
+        logger.info('Requesting Map Tiles API session token...');
+
+        const resp = await fetch(
+            `https://tile.googleapis.com/v1/createSession?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mapType: 'streetview', language: 'en-US', region: 'US' })
+            }
+        );
+
+        if (!resp.ok) {
+            const body = await resp.text();
+            throw new Error(`Failed to create session token: HTTP ${resp.status} - ${body}`);
+        }
+
+        const data = await resp.json();
+        this.sessionToken = data.session;
+        logger.success(`Session token obtained (expires: ${new Date(data.expiry * 1000).toISOString()})`);
+        return this.sessionToken;
+    }
+
+    buildTileUrl(panoType, pano, x, y, z, session, apiKey) {
         if (panoType === PANO_TYPE.LEGACY) {
             return `https://lh3.ggpht.com/p/${pano}=x${x}-y${y}-z${z}`;
         }
-        return `https://streetviewpixels-pa.googleapis.com/v1/tile?cb_client=maps_sv.tactile&panoid=${pano}&output=tile&x=${x}&y=${y}&zoom=${z}&nbt=1&fover=2`;
+        return `https://tile.googleapis.com/v1/streetview/tiles/${z}/${x}/${y}?session=${session}&key=${apiKey}&panoId=${pano}`;
     }
 
     async fetchWithRetry(url, retries = 0) {
@@ -35,7 +61,7 @@ class TileService {
 
     async saveTile(x, y, z, comp, name, resp) {
         const contentType = resp.headers.get("content-type");
-        
+
         if (contentType && contentType.includes("application/json")) {
             logger.error(`Invalid content type for ${comp}/${name} tile (${x},${y},${z})`);
             return false;
@@ -59,14 +85,13 @@ class TileService {
         });
     }
 
-    async fetchTile(x, y, z, comp, name, panoType, pano) {
+    async fetchTile(x, y, z, comp, name, panoType, pano, session, apiKey) {
         try {
-            const url = this.buildTileUrl(panoType, pano, x, y, z);
+            const url = this.buildTileUrl(panoType, pano, x, y, z, session, apiKey);
             const resp = await this.fetchWithRetry(url);
             return await this.saveTile(x, y, z, comp, name, resp);
         } catch (err) {
-            // HTTP 400 means tile doesn't exist at this coordinate - this is normal
-            if (err.message.includes('HTTP 400')) {
+            if (err.message.includes('HTTP 400') || err.message.includes('HTTP 404')) {
                 logger.verbose(`Tile not available for ${comp}/${name} (${x},${y},${z})`);
             } else {
                 logger.error(`Failed to fetch ${comp}/${name} tile (${x},${y},${z}): ${err.message}`);
@@ -75,17 +100,19 @@ class TileService {
         }
     }
 
-    async fetchAllTiles(comp, name, panoType, pano, maxZ) {
+    async fetchAllTiles(comp, name, panoType, pano, maxZ, apiKey) {
+        const session = await this.getSessionToken(apiKey);
+
         let totalTiles = 0;
         let successCount = 0;
         const pendingFetches = [];
 
         for (let z = 0; z <= maxZ; z++) {
             for (let x = 0; x < 2 ** z; x++) {
-                for (let y = 0; y < 2 ** (z - 1); y++) {
+                for (let y = 0; y < Math.max(1, 2 ** (z - 1)); y++) {
                     totalTiles++;
-                    
-                    const fetchPromise = this.fetchTile(x, y, z, comp, name, panoType, pano)
+
+                    const fetchPromise = this.fetchTile(x, y, z, comp, name, panoType, pano, session, apiKey)
                         .then(success => {
                             if (success) successCount++;
                         });
@@ -113,7 +140,7 @@ class TileService {
     calculateExpectedTiles(maxZ) {
         let count = 0;
         for (let z = 0; z <= maxZ; z++) {
-            count += (2 ** z) * (2 ** (z - 1));
+            count += (2 ** z) * Math.max(1, 2 ** (z - 1));
         }
         return count;
     }

@@ -59,13 +59,13 @@ class ChallengeController {
             res.json({ 
                 success: true, 
                 flag: flag,
-                distance: dist 
+                // distance: dist 
             });
         } else {
             logger.verbose(`Incorrect guess for ${comp}/${name}: ${dist.toFixed(2)}km off`);
             res.json({ 
                 success: false, 
-                distance: dist 
+                // distance: dist 
             });
         }
     }
